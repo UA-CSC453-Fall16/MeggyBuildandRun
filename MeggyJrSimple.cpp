@@ -1,8 +1,19 @@
 /*
-  MeggyJr.cpp - Meggy Jr RGB library for Arduino
- Version 1.4 - 4/17/2010
- Copyright (c) 2010 Windell H. Oskay.  All right reserved.
- 
+ * MeggyJrSimple.cpp
+ *
+ * A copy of the MeggyJrSimple.h file implementations.
+ * Put prototypes in MeggyJrSimple.h.
+ * Moved implementations here to enable separate
+ * compilation and simplify .s files that MeggyJava
+ * compiler needs to generate.
+ */
+/*
+  MeggyJrSimple.h - Meggy Jr RGB library for Arduino
+   The Meggy Jr Simplified Library (MJSL)
+   
+  Version 1.4 - 4/17/2010       http://www.evilmadscientist.com/
+  Copyright (c) 2010 Windell H. Oskay.  All right reserved.
+
     This library is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -15,427 +26,220 @@
 
     You should have received a copy of the GNU General Public License
     along with this library.  If not, see <http://www.gnu.org/licenses/>.
-	
-	Thanks to Arthur J. Dahm III and Jay Clegg for code written for the Peggy 2.0,
-	which was adapted to make this library.  
-	
+	  
 */
 
-/******************************************************************************
- * Includes
- ******************************************************************************/
+#include "MeggyJrSimple.h"
 
-extern "C" {
-#include <inttypes.h>
-#include <avr/interrupt.h>
-#include <avr/io.h> 
-//#include <wiring.h> 
-} 
+MeggyJr Meg;
+byte GameSlate[8][8];       
+byte lastButtonState;
 
-#include "MeggyJr.h" 
-
-byte MeggyJr::MeggyFrame[DISP_BUFFER_SIZE];
-
-byte MeggyJr::AuxLEDs;
-byte MeggyJr::SoundAllowed;	 
-byte MeggyJr::SoundEnabled;	
-
-byte MeggyJr::currentCol;
-byte MeggyJr::currentBrightness;
-byte* MeggyJr::currentColPtr;
-		 
-//unsigned long MeggyJr::SoundStopTime;	
-
-unsigned int MeggyJr::ToneTimeRemaining;
-
-#ifdef timingtest
-unsigned int MeggyJr::testTime;
-#endif
-	
-/******************************************************************************
- * Constructor
- ******************************************************************************/
-
-MeggyJr::MeggyJr(void)			
+byte Button_A;		 
+byte Button_B;
+byte Button_Up;
+byte Button_Down;
+byte Button_Left;
+byte Button_Right;
+ 
+//Color lookup Table
+byte ColorTable[26][3] = 
 {
-// Initialization routine for Meggy Jr RGB hardware
+  { MeggyDark  },  
+  { MeggyRed  }  ,
+  { MeggyOrange  },
+  { MeggyYellow  },
+  { MeggyGreen  },
+  { MeggyBlue  } ,
+  { MeggyViolet  },
+  { MeggyWhite  },  
+  { MeggyDimRed  },  
+  { MeggyDimOrange  },  
+  { MeggydimYellow  },  
+  { MeggyDimGreen  },  
+  { MeggydimAqua  },  
+  { MeggyDimBlue  },  
+  { MeggydimViolet  },   
+  { MeggyCursorColor},      //Extra bright cursor position color (not white).
+  {0,0,0},					//CustomColor0 (dark, by default)
+  {0,0,0},			        //CustomColor1 (dark, by default)
+  {0,0,0},					//CustomColor2 (dark, by default)
+  {0,0,0},					//CustomColor3 (dark, by default)	
+  {0,0,0},					//CustomColor4 (dark, by default)
+  {0,0,0},					//CustomColor5 (dark, by default)
+  {0,0,0},					//CustomColor6 (dark, by default)
+  {0,0,0},					//CustomColor7 (dark, by default)
+  {0,0,0},					//CustomColor8 (dark, by default)
+  {0,0,0}					//CustomColor9 (dark, by default)
+}; 
 
-	AuxLEDs = 0;
-	currentColPtr = MeggyFrame;
-	currentCol=0;
-	currentBrightness=0;
-	
-PORTC = 255U;	// Pull-ups on Port C  (for detecting button presses)
-DDRC = 0;		//All inputs
   
-DDRD = 254U;		// All D Output except for Rx
-PORTD = 254U;	
-		
-DDRB = 63U;	
-PORTB = 255;		
-
-//If a button is pressed at startup, turn sound off.
- if ((PINC & 63) != 63)
-{
-  SoundAllowed = 0;
-} 
-else
-{
-  SoundAllowed = 1;
-} 
-   
-   SoundEnabled = 0;
-   
-MeggyJr::ToneTimeRemaining = 0;
-   
-//Turn display off:
-PORTD |= 252U;
-PORTB |= 17U;
-
-ClearMeggy();
-  	 
-SPSR = (1<<SPI2X); 
-/*
-//ENABLE SPI, MASTER, CLOCK RATE fck/4:	
-SPCR = 80;// i.e., (1 << SPE) | ( 1 << MSTR ); 
- 
-SPDR = 0;
- while (!(SPSR & (1<<SPIF)))  { } // wait for last bitshift to complete
-SPDR = 0;
- while (!(SPSR & (1<<SPIF)))  { } // wait for last bitshift to complete
-SPDR = 0;
- while (!(SPSR & (1<<SPIF)))  { } // wait for last bitshift to complete
-SPDR = 0;
- while (!(SPSR & (1<<SPIF)))  { } // wait for last bitshift to complete
- 
-PORTB |= 4;		//Latch Pulse    
-PORTB &= 251;
-*/
-SPCR = 0; //turn off spi
-
-// setup the interrupt.
-TCCR2A = (1<<WGM21); // clear timer on compare match
-TCCR2B = (1<<CS21); // timer uses main system clock with 1/8 prescale
-OCR2A  = (F_CPU >> 3) / 8 / 15 / FPS; // Frames per second * 15 passes for brightness * 8 rows
-TIMSK2 = (1<<OCIE2A);	// call interrupt on output compare match
-
-sei( );    // Enable interrupts
-	
-	#ifdef timingtest
-MeggyJr::testTime = 0;
-#endif
-	
-	
-}
-
-/******************************************************************************
- * User API
- ******************************************************************************/
- 
-// Painfully Slow!  Don't use this, if you can avoid it:
-void MeggyJr::ClearMeggy (void)
-{
-	for (byte i = 0; i < DISP_BUFFER_SIZE; i++)
+void CheckButtonsDown()
 	{ 
-	    MeggyFrame[i]= 0;
+	 byte i = Meg.GetButtons(); 
+	 
+ 	 Button_B  = (i & 1);      
+     Button_A = (i & 2);     
+     Button_Up = (i & 4);
+     Button_Down = (i & 8);
+     Button_Left = (i & 16);
+     Button_Right = (i & 32);
+	 
+	 lastButtonState = i; 
 	}
-}
+	 
+void CheckButtonsPress()
+	{
+	 byte j;
+	 byte i = Meg.GetButtons();
+	 j = i & ~(lastButtonState);  // What's changed?
+	 
+ 	 Button_B  = (j & 1);      
+     Button_A = (j & 2);     
+     Button_Up = (j & 4);
+     Button_Down = (j & 8);
+     Button_Left = (j & 16);
+     Button_Right = (j & 32);
+	 
+	 lastButtonState = i;
+	}
  
-//Set Pixel Color:  use an RGB array to specify the color.
-// Very convenient for using color look-up tables.
-void MeggyJr::SetPxClr(byte x, byte y, byte *rgb)
-{
-  byte PixelPtr =  24*x + y;
-  MeggyFrame[PixelPtr] = rgb[2];   
-  PixelPtr += 8;
-  MeggyFrame[PixelPtr] = rgb[1];
-  PixelPtr += 8;
-  MeggyFrame[PixelPtr] = rgb[0]; 
-}
-  
  
-  
-/* 
-void MeggyJr::SoundCheck(void)   
-  { 
- // Obsolete with current version of library; sounds stop automatically.
- // If your program contains "SoundCheck();" somewhere, please remove it.
-}
-*/  
-   
+// Write a byte to the Auxiliary LED set at the top of the LED matrix display.  
+void SetAuxLEDs(byte InputLEDs)
+	{
+		Meg.AuxLEDs = InputLEDs;
+	}
 
-// Begin sound 
-void  MeggyJr::StartTone(unsigned int Tone, unsigned int duration)   
-  {
-  OCR1A = Tone;
-  SoundState(1);
-  MeggyJr::ToneTimeRemaining = duration;  
+ 
+
+// Write a byte to the Auxiliary LED set at the top of the LED matrix display.  
+// This version reverses bit order, so you can call it with an explicit binary number
+void SetAuxLEDsBinary(byte n)
+{
+n = (n & 240) >> 4 | (n & 15) << 4; 
+n = (n & 204) >> 2 | (n & 51) << 2; 
+Meg.AuxLEDs = (n & 170) >>1 | (n & 85) << 1; 
+}
+
+ 
+
+
+// Simple function to color in a pixel at position (x,y,color):
+void DrawPx(byte xin, byte yin, byte color)
+{
+		GameSlate[xin][yin] = color;
+}
+
+
+// Same as above, except checks to see if pixel is onscreen
+// This function is new as of v 1.4
+void SafeDrawPx(byte xin, byte yin, byte color)
+{
+    if ((xin >= 0) && (xin <= 7) && (yin >= 0) && (yin <= 7))
+		GameSlate[xin][yin] = color;
+}
+
+// function to read color of pixel at position (x,y):
+byte ReadPx(byte xin, byte yin)
+{   
+	return	GameSlate[xin][yin];
+}
+
+
+//Empty the Game Slate:
+void ClearSlate(void)
+{
+  byte i;
+  byte j;
+  i = 0;
+  while (i < 8) { 
+    j = 0;
+    while ( j < 8)
+    {
+      GameSlate[i][j] = 0;
+      j++;
+    }
+    i++;
   }
-    	
+}
+
+
+// DisplaySlate() :: Write the Game Slate to the Display Memory it.
+// This function looks up each color number (name) stored in the Game Slate,
+// retreives its R,G,B components from the color table, and writes them to the
+// R,G,B parts of the display memory.
+
+void DisplaySlate (void) {	
+  byte  j = 0; 
+  while (j < 8) 
+  {
+    Meg.SetPxClr(j, 7, ColorTable[ GameSlate[j][7] ]);   
+    Meg.SetPxClr(j, 6, ColorTable[ GameSlate[j][6] ]);  
+    Meg.SetPxClr(j, 5, ColorTable[ GameSlate[j][5] ]);   
+    Meg.SetPxClr(j, 4, ColorTable[ GameSlate[j][4] ]);  
+    Meg.SetPxClr(j, 3, ColorTable[ GameSlate[j][3] ]);   
+    Meg.SetPxClr(j, 2, ColorTable[ GameSlate[j][2] ]);  
+    Meg.SetPxClr(j, 1, ColorTable[ GameSlate[j][1] ]);   
+    Meg.SetPxClr(j, 0, ColorTable[ GameSlate[j][0] ]);  
+    j++; 
+  }  	 
+}  
+  
  
-byte MeggyJr::GetPixelR(byte x, byte y)
+ // other sound functions:
+void Tone_Start(unsigned int divisor, unsigned int duration_ms)
 {
-  return MeggyFrame[24*x + y + 16]; 
-}
-
-byte MeggyJr::GetPixelG(byte x, byte y)
-{
-  return MeggyFrame[24*x + y + 8]; 
-}
-
-byte MeggyJr::GetPixelB(byte x, byte y)
-{
-  return MeggyFrame[24*x + y]; 
-}
-
-// Clear a single pixel.  Not much better than writing "dark" to the pixel.
-void MeggyJr::ClearPixel(byte x, byte y)
-{
-byte PixelPtr =  24*x + y;
-MeggyFrame[PixelPtr] = 0;   
-PixelPtr += 8;
-MeggyFrame[PixelPtr] = 0;
-PixelPtr += 8;
-MeggyFrame[PixelPtr] = 0; 
-}
-
- 
-// GetButtons returns a byte with a bit set for 
-// each of the buttons that is currently pressed.
-
-byte MeggyJr::GetButtons(void)
-{
-  return (~(PINC) & 63U); 
+  Meg.StartTone(divisor, duration_ms);
 }
 
 
 
-// Set sound ON or OFF by calling
-// SoundState(0) or SoundState(1).
+#define Tone_Update(); {}			// For backwards compatibility.
 
-void MeggyJr::SoundState(byte t)
+/*
+  // Stop the note if its completion time has come.
+void Tone_Update(void)
 {
+ // Obsolete with current version of library; sounds stop automatically.
+ // please remove this function from your program if it is there.
+}
+*/
 
-if ((t) && (SoundAllowed))
-	{ 
+
+void EditColor(byte WhichColor, byte RedComponent, byte GreenComponent, byte BlueComponent)
+{
+   ColorTable[WhichColor][0] = RedComponent;
+   ColorTable[WhichColor][1] = GreenComponent;
+   ColorTable[WhichColor][2] = BlueComponent;
+ } 
+
+
+
+
+void MeggyJrSimpleSetup(void) 
+  {
+		Meg = MeggyJr();  
+		
+	    lastButtonState = Meg.GetButtons();
+		
+		 Meg.StartTone(0, 0);
+	//	 Tone_Update();
+		 SoundOff();
+  }
+
+/* MMS, added this */  
+void delay_ms(unsigned int time) {
+    _delay_ms(time);
     
- 		TCCR1A = 65;	// 0100 0001 
-		//COM1A10 = 01 :  Toggle output OC1A on compare match.
-		//WGM11,10: 01
-
-		TCCR1B = 17;	// 0001 0001  	// CS12..10 = 001: No clock prescaling. 
-		// WGM13,12: 10
-		// CS12,CS11,CS10: 001.  Count at CLKI/O/1 (no prescaling)
-
-		//WGM: 1001, phase+frequency correct PWM
-		// with top at OCR1A and update OCR1A at bottom.
-		
-        SoundEnabled = 1;
-		DDRB |= 2; 
-	}
-else
-	{
-	    SoundEnabled = 0;
-		TCCR1A = 0;	
-
-	if (t)
-	    TCCR1B = 128;		// Harmless; can use (TCCR1B == 0) to check if sound is done.
-	else
-		TCCR1B = 0; 	 
-		DDRB &= 253;
-		PORTB |= 2;
-	}
-}
-  
-
-SIGNAL(TIMER2_COMPA_vect)
-{			
-	// there are 15 passes through this interrupt for each row per frame.
-	// ( 15 * 8) = 120 times per frame.
-	// during those 15 passes, a led can be on or off.
-	// if it is off the entire time, the perceived brightness is 0/15
-	// if it is on the entire time, the perceived brightness is 15/15
-	// giving a total of 16 average brightness levels from fully off to fully on.
-	// currentBrightness is a comparison variable, used to determine if a certain
-	// pixel is on or off during one of those 15 cycles.   
-	//
-	// At 120 Hz refresh, this executes 15*8*120 = 14,400 times per second.
-	// Full routine takes about 340 cycles, 21 us. 
-	//
-	// 14400*340/16000000 = ~0.3; so about 1/3 of the processor time is spent in 
-	// this interrupt routine.
-
-#ifdef timingtest
-unsigned int soundTemp = OCR1A;
-OCR1A = 65500;
-TCNT1 = 0;
-#endif
-
-	if (++MeggyJr::currentBrightness >= MAX_BRIGHTNESS)  
-	{
-		MeggyJr::currentBrightness = 0;
-		if (++MeggyJr::currentCol > 7)
-		{
-			MeggyJr::currentCol = 0; 
-			MeggyJr::currentColPtr = MeggyJr::MeggyFrame;
-		}
-		else
-			MeggyJr::currentColPtr += 24;
-			 
-		if (MeggyJr::ToneTimeRemaining >  0)
-			{ 
-				if (--MeggyJr::ToneTimeRemaining == 0)
-					{
-						TCCR1A = 0;	  
-						DDRB &= 253;
-						PORTB |= 2;
-						TCCR1B = 0;  // High bit flags that the sound is done.
-					} 
-			} 
-	}
-		
-	////////////////////  Parse a row of data and write out the bits via spi
-  
-	byte *ptr = MeggyJr::currentColPtr + 23;  // it is more convenient to work from right to left
-	byte p;
-	byte cb =  MeggyJr::currentBrightness; 
-	// Optimization: interleave waiting for SPI with other code, so the CPU can do something useful
-	// when waiting for each SPI transmission to complete
-
-//Turn display off:
-PORTD |= 252U;
-PORTB |= 17U;
- 
-SPCR = 80;// i.e., (1 << SPE) | ( 1 << MSTR );   
-
-// First SPI word:  Aux LED drive.  Zero, except once per full screen redraw.	 
-  
-if ((cb + MeggyJr::currentCol ) == 0)
-	SPDR = MeggyJr::AuxLEDs;
-else
-    SPDR = 0; 
-        
-	byte bits=0; 
- 
-	p = *ptr--;
-	if (p > cb)  			
-          bits |= 128;
-	p = *ptr--;
-	if (p > cb)  			
-          bits |= 64;
-	p = *ptr--;
-	if (p > cb)  			
-          bits |= 32;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 16;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 8;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 4;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 2;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 1;
-		    
-//	while (!(SPSR & (1<<SPIF)))  { } // wait for prior bitshift to complete
-	SPDR = bits;
-	
-	bits=0;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 128;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 64;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 32;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 16;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 8;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 4;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 2;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 1;
-
-//	while (!(SPSR & (1<<SPIF)))  { } // wait for prior bitshift to complete
-	SPDR = bits;
-		
-	bits=0;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 128;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 64;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 32;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 16;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 8;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 4;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 2;
-	p = *ptr--;
-	if (p > cb)  				
-          bits |= 1;
-
-//asm("nop");	// short delay
-
-
-	while (!(SPSR & (1<<SPIF)))  { } // wait for prior bitshift to complete
-	SPDR = bits;
-	
-	////////////////////  Now set the row and latch the bits
-	byte portbTemp = 0;	
-	byte portdTemp = 0;
-
-	if (MeggyJr::currentCol == 0)
-		 portbTemp = 239U;
-	else if (MeggyJr::currentCol == 1)
-		 portbTemp = 254U;
-	else
-		 portdTemp = ~(1 << (9 - MeggyJr::currentCol));
-   
-	while (!(SPSR & (1<<SPIF)))  { } // wait for last bitshift to complete
- 
-PORTB |= 4;		//Latch Pulse    
-
-    if (MeggyJr::currentCol > 1)
-       PORTD &= portdTemp;
-    else
-       PORTB &= portbTemp;
-
-       PORTB &= 251;           //End Latch Pulse
-       SPCR = 0; //turn off spi 
-	    
-#ifdef timingtest
-
-if (TCNT1 > MeggyJr::testTime)
-   MeggyJr::testTime = TCNT1;
-   
-   OCR1A =  soundTemp;    
-#endif
-	
+	/*uint32_t i;
+	for (i = 0; i < time; i++) {
+		_delay_ms(1);
+	}*/
 }
 
+byte GetButtons() {
+    return Meg.GetButtons();
+    
+    // FIXME: make consistent with rest of interface
+}
