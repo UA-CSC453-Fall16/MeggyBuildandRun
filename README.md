@@ -25,6 +25,16 @@ clone of the MeggyBuildandRun repository type the following:
 This will generate a PA5Cylon.java.s file, which you can then 
 compile and upload to the Meggy Jr using the provided Makefile.
 
+## AVR simulator and MeggyJr emulator
+
+The MJSIM.jar program enables you to step through an
+AVR assembly code file and visualize what impact it
+will have on the MeggyJr.  It has a GUI mode or a batch mode.
+```
+    java -jar MJSIM.jar -f PA5Cylon.java.s
+    java -jar MJSIM.jar -b -f PA5Cylon.java.s
+```
+
 
 ## Trying out more MeggyJr examples using Arduino
 
