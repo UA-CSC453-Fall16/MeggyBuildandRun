@@ -3,7 +3,7 @@
 #
 # This makefile will generate a .hex file from a 
 # file.cpp or file.s
-# and upload it to the MeggyJr when the commands 
+# and upload it to the MeggyJr with the commands 
 #   make file.hex
 # and
 #   make file.install
