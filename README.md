@@ -1,6 +1,29 @@
 # MeggyBuildandRun
 Makefile and C++ run-time library for running on devices, MJ.jar, MJSIM.jar, examples, and Java-only run-time library.
 
+## Building and Uploading .cpp or .s files to Meggy
+1. The Arduino IDE is already installed on the Macs in G-S 930 and 228. 
+Look in the applications folder, find Arduino, and open it.
+2. Plug in your MeggyJr cable. In the Arduino application, look under the Tools menu to see what the port is called for your cable (e.g., /dev/cu.usbserial-XXXXXXX).  IMPORTANT: the black wire should be closest
+to the screen on the device.
+3. Edit the port name in the Makefile to match your port.
+4. Follow the directions at the top of the Makefile file to 
+compile the example and install it on your Meggy Jr device.
+
+
+## Use the reference compiler to compile a MeggyJava program
+
+The reference compiler compiles MeggyJava code to AVR assembly, 
+which is what your compilers will be doing as well. 
+It can be helpful to use the reference compiler on 
+your test cases to see what code it generates.
+To try out the reference compiler in your
+clone of the MeggyBuildandRun repository type the following:
+```
+    java -jar MJ.jar PA5Cylon.java
+```
+This will generate a PA5Cylon.java.s file, which you can then 
+compile and upload to the Meggy Jr using the provided Makefile.
 
 
 ## Trying out more MeggyJr examples using Arduino
