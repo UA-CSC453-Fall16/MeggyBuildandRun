@@ -41,7 +41,8 @@ will have on the MeggyJr.  It has a GUI mode or a batch mode.
 1. Download MeggyJrRGBv15.zip from (https://github.com/evil-mad/MeggyJrRGB/releases/download/v1.5/MeggyJrRGBv15.zip).
 2. Exit out of Arduino application.
 3. Put the unzipped folder into the location `/home/your-user-name/Documents/Arduino/libraries`.
-4. Restart the Arduino application.
-5. You should be able to open the MeggyJr examples. 
+4. Remove all the files in the unzipped MeggyJrRGB folder that start with a "._" (for example ._MeggyJr.cpp). Do this on the command line because files that start with a "." might be hidden in the finder.
+5. Restart the Arduino application.
+6. You should be able to open the MeggyJr examples. 
 For instance, try 
 File->Examples->MeggyJrRGB->MeggyJr-Attack in the Arduino application. 
